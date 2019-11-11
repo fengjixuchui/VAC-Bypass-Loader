@@ -99,6 +99,30 @@ VOID waitOnModule(DWORD processId, PCWSTR moduleName)
     }
 }
 
+VOID killAnySteamProcess()
+{
+    HANDLE processSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    PROCESSENTRY32W processEntry;
+    processEntry.dwSize = sizeof(processEntry);
+
+    if (Process32FirstW(processSnapshot, &processEntry)) {
+        PCWSTR steamProcesses[] = { L"Steam.exe", L"SteamService.exe", L"steamwebhelper.exe" };
+        do {
+            for (INT i = 0; i < _countof(steamProcesses); i++) {
+                if (!lstrcmpW(processEntry.szExeFile, steamProcesses[i])) {
+                    HANDLE processHandle = OpenProcess(PROCESS_TERMINATE, FALSE, processEntry.th32ProcessID);
+                    if (processHandle) {
+                        TerminateProcess(processHandle, 0);
+                        CloseHandle(processHandle);
+                    }
+                }
+            }
+        } while (Process32NextW(processSnapshot, &processEntry));
+    }
+    CloseHandle(processSnapshot);
+}
+
 INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, INT nShowCmd)
 {
     HKEY key = NULL;
@@ -109,6 +133,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         if (!RegQueryValueExW(key, L"InstallPath", NULL, NULL, (LPBYTE)(steamPath + 1), &steamPathSize)) {
             lstrcatW(steamPath, L"\\Steam.exe\"");
             lstrcatW(steamPath, PathGetArgsW(GetCommandLineW()));
+
+            killAnySteamProcess();
 
             STARTUPINFOW info = { sizeof(info) };
             PROCESS_INFORMATION processInfo;
