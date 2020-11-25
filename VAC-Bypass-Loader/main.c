@@ -89,7 +89,7 @@ VOID waitOnModule(DWORD processId, PCWSTR moduleName)
 
         if (Module32FirstW(moduleSnapshot, &moduleEntry)) {
             do {
-                if (!lstrcmpW(moduleEntry.szModule, moduleName)) {
+                if (!lstrcmpiW(moduleEntry.szModule, moduleName)) {
                     foundModule = TRUE;
                     break;
                 }
@@ -110,7 +110,7 @@ VOID killAnySteamProcess()
         PCWSTR steamProcesses[] = { L"Steam.exe", L"SteamService.exe", L"steamwebhelper.exe" };
         do {
             for (INT i = 0; i < _countof(steamProcesses); i++) {
-                if (!lstrcmpW(processEntry.szExeFile, steamProcesses[i])) {
+                if (!lstrcmpiW(processEntry.szExeFile, steamProcesses[i])) {
                     HANDLE processHandle = OpenProcess(PROCESS_TERMINATE, FALSE, processEntry.th32ProcessID);
                     if (processHandle) {
                         TerminateProcess(processHandle, 0);
@@ -126,12 +126,13 @@ VOID killAnySteamProcess()
 INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, INT nShowCmd)
 {
     HKEY key = NULL;
-    if (!RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Valve\\Steam", 0, KEY_QUERY_VALUE, &key)) {
-        WCHAR steamPath[MAX_PATH] = { L"\"" };
-        DWORD steamPathSize = MAX_PATH - 1;
+    if (!RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", 0, KEY_QUERY_VALUE, &key)) {
+        WCHAR steamPath[MAX_PATH];
+        steamPath[0] = L'"';
+        DWORD steamPathSize = sizeof(steamPath) - sizeof(WCHAR);
 
-        if (!RegQueryValueExW(key, L"InstallPath", NULL, NULL, (LPBYTE)(steamPath + 1), &steamPathSize)) {
-            lstrcatW(steamPath, L"\\Steam.exe\"");
+        if (!RegQueryValueExW(key, L"SteamExe", NULL, NULL, (LPBYTE)(steamPath + 1), &steamPathSize)) {
+            lstrcatW(steamPath, L"\"");
             lstrcatW(steamPath, PathGetArgsW(GetCommandLineW()));
 
             killAnySteamProcess();
@@ -160,7 +161,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 loaderParams.baseAddress = executableImage;
                 loaderParams.loadLibraryA = LoadLibraryA;
                 loaderParams.getProcAddress = GetProcAddress;
-                loaderParams.rtlZeroMemory = (PVOID)GetProcAddress(LoadLibraryW(L"ntdll"), "RtlZeroMemory");
+                VOID (NTAPI RtlZeroMemory)(VOID* Destination, SIZE_T Length);
+                loaderParams.rtlZeroMemory = RtlZeroMemory;
                 loaderParams.imageBase = ntHeaders->OptionalHeader.ImageBase;
                 loaderParams.relocVirtualAddress = ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress;
                 loaderParams.importVirtualAddress = ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
